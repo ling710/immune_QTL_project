@@ -1,0 +1,48 @@
+---
+title: "issue2"
+author: "ling"
+date: '2022-11-29'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+```{r}
+setwd("/Users/tq20202/Desktop/main/DICE_rawdata")
+f<-list.files("B_naive")
+setwd("/Users/tq20202/Desktop/main/DICE_rawdata/B_naive")
+data<-c()
+for (i in 1:length(f)){
+  temp<-read.table(file=f[i], header=T, sep="\t", quote="", stringsAsFactors=F, check.names=F)
+  temp<-temp[temp$p<1e-5,]
+  data<-rbind(data,temp)
+}
+###Dice B_naive instruments###
+head(data)
+```
+
+```{r}
+naiveB<-read.csv("/Users/tq20202/Desktop/main/beta_compare/naiveB.csv")
+naiveB<-naiveB[naiveB$P_VALUE<1e-5,]
+###oneK1K B_naive instruments###
+head(naiveB)
+```
+
+## Including Plots
+```{r, echo=FALSE}
+library(ggplot2)
+i<-intersect(data$SNP,naiveB$RSID)
+dice<-data[data$SNP %in% i,]
+dice<-dice[!duplicated(dice$SNP),]
+onek1k<-naiveB[naiveB$RSID %in% i,]
+onek1k$beta<-as.numeric(onek1k$SPEARMANS_RHO)/sqrt(2*as.numeric(onek1k$A2_FREQ_ONEK1K)*(1-as.numeric(onek1k$A2_FREQ_ONEK1K)))
+onek1k<-onek1k[!duplicated(onek1k$RSID),]
+dice<-dice[order(dice$SNP),]
+onek1k<-onek1k[order(onek1k$RSID),]
+dd<-data.frame(beta_dice=dice$beta,beta_oneK1K=onek1k$beta)
+ggplot(data = dd, mapping = aes(x = beta_dice, y = beta_oneK1K)) + geom_point(size = 3, alpha=0.3)
+```
+
