@@ -1,0 +1,18 @@
+﻿cancer type,IEU GWAS id,N case,N control,Sample size,nSNPs,sex
+Breast cancer,ieu-b-4810,13879,198523,212402,NA,Females
+Lung cancer,ieu-b-4955,2671,372016,374687,11078115,Males and Females
+Ovarian cancer,ieu-b-4963,1218,198523,199741,9822229,Males and Females
+Prostate cancer,ieu-b-85,79148,61106,140254,20346368,Males
+Squamous cell lung cancer,ieu-a-967,3275,15038,18313,8893750,Males and Females
+Cervical cancer,ieu-b-4876,563,198523,199086,8506261,Females
+Brain cancer,ieu-b-4875,606,372016,372622,8629116,Males and Females
+Colon cancer,finn-b-C3_COLON_EXALLC,1803,174006,175809,16380317,Males and Females
+Rectum cancer,finn-b-C3_RECTUM_EXALLC,1078,174006,175084,16380307,Males and Females
+Bladder cancer,ieu-b-4874,1279,372016,373295,9904926,Males and Females
+Esophageal cancer,ieu-b-4960,740,372016,372756,8970465,Males and Females
+Liver cancer,ieu-b-4953,168,372016,372184,6304034,Males and Females
+Pancreatic cancer,ieu-a-822,1896,1939,3835,521863,Males and Females
+Melanoma skin cancer,ieu-b-4969,3751,372016,375767,11396019,Males and Females
+non-melanoma skin cancer,ieu-b-4959,23694,372016,395710,12321875,Males and Females
+Stomach cancer,finn-b-C3_STOMACH_EXALLC,633,174006,174639,16380305,Males and Females
+Head and neck cancer,ieu-b-4912,1106,372016,373122,9655080,Males and Females

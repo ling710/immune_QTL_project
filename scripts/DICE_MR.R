@@ -1,49 +1,18 @@
 rm(list=ls())
 gc()
-setwd("/Users/tq20202/Desktop/main")
-f<-list.files("exposure")
-setwd("/Users/tq20202/Desktop/main/exposure")
-data<-c()
-for (i in 1:length(f)){
-  temp<-read.table(file=f[i], header=T, sep="\t", quote="", stringsAsFactors=F, check.names=F)
-  temp$cell<-strsplit(f[i],split="_ld")[[1]][1]
-  data<-rbind(data,temp)
-}
-data <- data.frame(SNP = data$SNP,
-                  chr = data$chr.exposure,
-                  pos = data$pos.exposure,
-                  beta = as.numeric(data$beta.exposure),
-                  se = as.numeric(data$se.exposure),
-                  effect_allele = data$effect_allele.exposure,
-                  other_allele = data$other_allele.exposure,
-                  pval = as.numeric(data$pval.exposure),
-                  Phenotype = paste(data$exposure,data$cell,sep="_"),
-                  samplesize = 1544)
-data <- format_data(data, type="exposure", phenotype_col = "Phenotype",chr_col = "chr",pos_col = "pos",samplesize_col = "samplesize")
-write.csv(data,"/Users/tq20202/Desktop/main/exposure.csv")
-
-###########MR analysis###################################
-rm(list=ls())
-gc()
-setwd("/Users/tq20202/Desktop/main")
-
+setwd("/Users/tq20202/Desktop/DICE")
 library(TwoSampleMR)
 library(MendelianRandomization)
 
-outcome_id <- c("ukb-b-2160","ieu-b-4953","ieu-a-965","ieu-a-967","ieu-b-4963","bbj-a-140",
-                "ukb-b-1251","ukb-d-C43","finn-b-C3_STOMACH","ukb-b-16890","ukb-b-8777",
-                "ukb-b-20145","bbj-a-117","finn-b-C3_GBM","ieu-b-4912","ukb-b-8193")
-outcome_name <- c("prostate_cancer","liver_cancer","lung_cancer","Squamous cell lung_cancer",
-                  "Ovarian_cancer","Pancreatic_cancer","rectum_cancer","skin_cancer",
-                  "stomach_cancer","breast_cancer","cervical_cancer","colon_cancer",
-                  "Esophageal_cancer","Brain_cancer","head and neck_cancer","bladder_cancer")
-outcome_samplesize <- c(463010,372184,18336,18313,199741,196187,463010,361194,218792,462933,
-                        462933,462933,197045,218701,373122,462933)
-ncase <- c(3436,168,3442,3275,1218,442,1470,1672,633,10303,1889,1494,1300,91,1106,1101)
-ncontrol <- c(459574,372016,14894,15038,198523,195745,461540,359522,218159,452630,461044,
-              461439,195745,218792,372016,461832)
-
+###########MR analysis###################################
+outcomelist<-read.csv("outcome_selection.csv")
+outcome_id <-outcomelist$IEU.GWAS.id
+outcome_name<-outcomelist$cancer.type
+outcome_samplesize<-outcomelist$Sample.size
+ncase<-outcomelist$N.case
+ncontrol<-outcomelist$N.control
 exposure<-read.csv("exposure.csv")
+
   for (j in 1:length(outcome_id)){
     exposure_dat<-exposure[exposure$pval.exposure<=5e-8,]
     ###F-statistics for each SNPs
@@ -70,7 +39,7 @@ exposure<-read.csv("exposure.csv")
     
     test<-harmdat
     test$new<- paste(test$SNP,test$exposure,sep="_")
-    test<-test[,-39]
+    test<-test[,-which(colnames(test)=="id.exposure")]
     test <- format_data(test, type="exposure", snp_col = "SNP", pval_col = "pval.exposure",
                         beta_col = "beta.exposure", se_col = "se.exposure",
                         effect_allele_col = "effect_allele.exposure",
@@ -86,13 +55,13 @@ exposure<-read.csv("exposure.csv")
     ###steiger filtering
     testres <- generate_odds_ratios(testres)
     testres <- cbind(SNP=1,testres,beta.exp=1,beta.out=1,se.exp=1,se.out=1,eaf.out=1,p.exp=1,p.out=1,samplesize.exposure=1)
-    for (r in 1: nrow(testharm)){
+    for (r in 1: nrow(testres)){
       testres[r,1] <- testharm[testharm$id.exposure==testres[r,"id.exposure"],"SNP"]
-      testres[r,16:23] <- testharm[testharm$id.exposure==testres[r,"id.exposure"],c("beta.exposure","beta.outcome","se.exposure",
+      testres[r,(ncol(testres)-7):ncol(testres)] <- testharm[testharm$id.exposure==testres[r,"id.exposure"],c("beta.exposure","beta.outcome","se.exposure",
                                                                                     "se.outcome","eaf.outcome",
                                                                                     "pval.exposure","pval.outcome","samplesize.exposure")]
     }
-    testres <- na.omit(testres)
+    #testres <- na.omit(testres)
     testres <- cbind(testres,rsq.exposure=1,rsq.outcome=1,samplesize.outcome=outcome_samplesize[j])
     testres$rsq.exposure <- (get_r_from_pn(p=testres$p.exp, n=testres$samplesize.exposure))^2
     testres$rsq.outcome <- (get_r_from_lor(lor=log(testres$or),af=testres$eaf.out,ncase=ncase[j],ncontrol=ncontrol[j],prevalence=ncase[j]/outcome_samplesize[j]))^2
@@ -113,6 +82,7 @@ exposure<-read.csv("exposure.csv")
       harmdat[k,"steiger_pval"] <- testres[testres$exposure==harmdat[k,"match"],"steiger_pval"][1]
     }
     harmdat<-harmdat[harmdat$steiger_dir==1,]
+    harmdat<-harmdat[harmdat$mr_keep==T,]
     length(unique(harmdat$exposure))
     harmname<-paste("harmdata",outcome_name[j],outcome_id[j],sep="_")
     harmname<-paste(harmname,".txt",sep="")
@@ -255,6 +225,7 @@ exposure<-read.csv("exposure.csv")
       mrres <- rbind(mrres,result)
     }
     #####FDR Adjustment for Pvalue######
+    mrres<-generate_odds_ratios(mrres)
     mrres$fdr <- p.adjust(mrres$pval, method = "fdr", n = length(mrres$pval))
     resname<-paste("mrres",outcome_name[j],outcome_id[j],sep="_")
     resname<-paste(resname,".txt",sep="")
@@ -263,11 +234,45 @@ exposure<-read.csv("exposure.csv")
 
 
 
-
-
+#################mrres###################################
+setwd("/Users/tq20202/Desktop/DICE")
+f<-list.files("mrres")
+setwd("/Users/tq20202/Desktop/DICE/mrres")
+data<-c()
+for (i in 1:length(f)){
+  temp<-read.table(file=f[i], header=T, sep="\t", quote="", stringsAsFactors=F, check.names=F)
+  temp$cancer<-strsplit(f[i],split="_")[[1]][2]
+  temp$cancerid<-strsplit(strsplit(f[i],split="cancer_")[[1]][2],split="[.]")[[1]][1]
+  data<-rbind(data,temp)
+}
+res<-data[data$fdr<0.05,]
+write.csv(res,"/Users/tq20202/Desktop/DICE/mrresfdr.csv")
+res$match<-paste(res$id,res$cancer,res$cancerid,sep="_")
+setwd("/Users/tq20202/Desktop/DICE")
+f<-list.files("harmdata")
+setwd("/Users/tq20202/Desktop/DICE/harmdata")
+data<-c()
+for (i in 1:length(f)){
+  temp<-read.table(file=f[i], header=T, sep="\t", quote="", stringsAsFactors=F, check.names=F)
+  temp$cancer<-strsplit(f[i],split="_")[[1]][2]
+  temp$cancerid<-strsplit(strsplit(f[i],split="cancer_")[[1]][2],split="[.]")[[1]][1]
+  data<-rbind(data,temp)
+}
+data$match<-paste(data$exposure,data$cancer,data$cancerid,sep="_")
+adata<-data[data$match %in% res$match,]
+colocdata<-data.frame(SNP=adata$SNP,chr=adata$chr,pos=adata$pos,beta.exp=adata$beta.exposure,
+                      se.exp=adata$se.exposure,p.exp=adata$pval.exposure,alt.exp=adata$effect_allele.exposure,
+                      ref.exp=adata$other_allele.exposure,gene=adata$gene,cell=adata$cell,
+                      cancer=adata$cancer,cancerid=adata$cancerid)
+write.csv(colocdata,"/Users/tq20202/Desktop/DICE/colocdata.csv")
 
 ##################coloc###################################
+rm(list=ls())
+gc()
+library(TwoSampleMR)
 library(coloc)
+setwd("/Users/tq20202/Desktop/DICE")
+
 ##coloc function##
 coloc.analysis <- function(beta1,beta2,se1,se2,MAF1,MAF2,N1,N2,s){
   dataset1 <- list(beta=beta1, varbeta=se1^2, MAF=MAF1,type="quant", N=N1)
@@ -280,23 +285,29 @@ coloc.analysis <- function(beta1,beta2,se1,se2,MAF1,MAF2,N1,N2,s){
   return(df)
 }
 
-setwd("/Users/tq20202/Desktop/DICE")
-res<-read.csv("fdrres.csv")
-setwd("/Users/tq20202/Desktop/DICE/raw data")
+res<-read.csv("colocdata.csv")
+outcomelist<-read.csv("outcome_selection.csv")
+outcome_id <-outcomelist$IEU.GWAS.id
+outcome_name<-outcomelist$cancer.type
+outcome_samplesize<-outcomelist$Sample.size
+ncase<-outcomelist$N.case
+ncontrol<-outcomelist$N.control
 bres<-c()
 for (i in 1: nrow(res)){
   snp<-res[i,"SNP"]
   chr<-res[i,"chr"]
   pos<-res[i,"pos"]
   cell<-res[i,"cell"]
-  cellfile<-res[i,"cellfile"]
-  outid<-res[i,"outcome_id"]
+  gene=res[i,"gene"]
+  cellfile<-paste("/Users/tq20202/Desktop/DICE/raw data/",cell,".txt",sep="")
+  cancer<-res[i,"cancer"]
+  outid<-res[i,"cancerid"]
   f<-read.table(file=cellfile, header=T, sep="\t", quote="", stringsAsFactors=F, check.names=F)
-  data<-f[f$chr==chr & f$position>pos-500000 & f$position<pos+500000,]
-  data$se<-abs(data$beta)/qnorm(1-data$p/2)
-  data$se<-data$se+0.00001
-  data$n=1544
-  exp=data.frame(SNP=data$SNP,effect_allele=data$ALT,other_allele=data$REF,effect_allele_freq=0,beta=data$beta,se=data$se,p=data$p,n=data$n)
+  f<-f[f$chr==chr & f$position>pos-500000 & f$position<pos+500000,]
+  f$se<-abs(f$beta)/qnorm(1-f$p/2)
+  f$se<-f$se+0.00001
+  f$n=1544
+  exp=data.frame(SNP=f$SNP,effect_allele=f$ALT,other_allele=f$REF,beta=f$beta,se=f$se,p=f$p,n=f$n)
   out <- extract_outcome_data(snps=exp$SNP, outcomes= outid)
   temp=intersect(exp$SNP,out$SNP)
   exp<-exp[exp$SNP %in% temp,]
@@ -308,21 +319,104 @@ for (i in 1: nrow(res)){
   for (j in 1:nrow(exp)){
     e1<-exp[j,"effect_allele"]
     e2<-out[j,"effect_allele.outcome"]
-    if (e1==e2){exp[j,"effect_allele_freq"]=out[j,"eaf.outcome"]}else{exp[j,"effect_allele_freq"]=1-out[j,"eaf.outcome"]}
+    if (e1==e2){exp[j,"effect_allele_freq"]=out[j,"eaf.outcome"]}else{exp[j,"effect_allele_freq"]=1-out[j,"eaf.outcome"];exp[j,"beta"]=(-1)*exp[j,"beta"]}
   }
   out=data.frame(SNP=out$SNP,effect_allele=out$effect_allele.outcome,other_allele=out$other_allele.outcome,effect_allele_freq=out$eaf.outcome,beta=out$beta.outcome,se=out$se.outcome,p=out$pval.outcome,n=outcome_samplesize[which(outcome_id==outid)],case=ncase[which(outcome_id==outid)])
-  expfile<-paste("/Users/tq20202/Desktop/DICE/pwcoco/data/",i,"_exp.txt",sep="")
-  outfile<-paste("/Users/tq20202/Desktop/DICE/pwcoco/data/",i,"_out.txt",sep="")
+  expfile<-paste("/Users/tq20202/Desktop/DICE/pwcoco/",i,"_exp.txt",sep="")
+  outfile<-paste("/Users/tq20202/Desktop/DICE/pwcoco/",i,"_out.txt",sep="")
   write.table(exp, file=expfile, row.names=F, col.names=T, sep="\t", quote=F)
   write.table(out, file=outfile, row.names=F, col.names=T, sep="\t", quote=F)
   df <- data.frame(SNP=exp$SNP,beta1=as.numeric(exp$beta),beta2=as.numeric(out$beta),se1=as.numeric(exp$se),se2=as.numeric(out$se),MAF1=as.numeric(exp$effect_allele_freq),MAF2=as.numeric(out$effect_allele_freq),N1=exp$n,N2=out$n,s=out$case/out$n)
   df <- na.omit(df)
   #coloc analysis
   result <- coloc.analysis(df$beta1, df$beta2, df$se1, df$se2, df$MAF1, df$MAF2, N1=df$N1, N2=df$N2, s=df$s) 
-  result <- data.frame(result,num=i)
+  result <- data.frame(result,num=i,gene=gene,cell=cell,cancer=cancer,cancerid=outid)
   bres <- rbind(bres,result)
 }
-write.table(bres, file="/Users/tq20202/Desktop/DICE/coloc_res.txt", row.names=F, col.names=T, sep="\t", quote=F)
+bres$match<-paste(bres$gene,bres$cell,bres$cancer,bres$cancerid,sep="_")
+mr<-read.csv("mrresfdr.csv")
+mr$match<-paste(mr$id,mr$cancer,mr$cancerid,sep="_")
+for (i in 1:nrow(mr)){
+  if (nrow(bres[bres$match==mr[i,"match"],])==1){mr[i,"PPH4"]<-bres[bres$match==mr[i,"match"],"PP.H4.abf"]}
+  else {mr[i,"PPH4"]<-max(bres[bres$match==mr[i,"match"],"PP.H4.abf"])}
+}
+write.table(bres, file="/Users/tq20202/Desktop/DICE/bres.txt", row.names=F, col.names=T, sep="\t", quote=F)
+
+#####LDCHECK#######################################
+library(TwoSampleMR)
+library(MendelianRandomization)
+library(ieugwasr)
+setwd("/Users/tq20202/Desktop/DICE")
+fdrres<-read.csv("colocdata.csv")
+ldres<-c()
+for (i in 1:nrow(fdrres)){
+  rsid=fdrres[i,"SNP"]
+  chr=fdrres[i,"chr"]
+  pos=fdrres[i,"pos"]
+  gene=fdrres[i,"gene"]
+  cell=fdrres[i,"cell"]
+  cellfile<-paste("/Users/tq20202/Desktop/DICE/raw data/",cell,".txt",sep="")
+  cancer<-res[i,"cancer"]
+  outid<-res[i,"cancerid"]
+  f<-read.table(file=cellfile, header=T, sep="\t", quote="", stringsAsFactors=F, check.names=F)
+  f<-f[f$chr==chr & f$position>pos-500000 & f$position<pos+500000,]
+  assoc<-extract_outcome_data(snps=f$SNP, outcomes= outid)
+  if (nrow(assoc)!=0){
+    assoc <- assoc[order(assoc$pval.outcome),]
+    data <- assoc[assoc$pval.outcome<1E-3,]
+    if(nrow(data)>=500){data <- data[1:499,] }
+    print(nrow(data))
+    
+    if (nrow(data)!=0){
+      data<-na.omit(data[,1:9])
+      snp <- append(data$SNP, rsid)
+      a <- NULL
+      attempts <- 0
+      while(attempts<=10){    
+        a <- ld_matrix(variants=snp,pop = "EUR")
+        if(is.null(a)){attempts<-attempts+1}else{break}
+      }
+      if(is.null(nrow(a))==TRUE){c<-cbind(snp=rsid, ld_snp=rsid, ld_r2=1)} 
+      else {col.index <- which(grepl(rsid,colnames(a)))
+      if (length(col.index)>0){
+        b <- (a[,col.index])^2
+        b <- b[order(b)]
+        b <- b[(length(b)-1)] 
+        c <- cbind(snp=rsid, ld_snp=names(b), ld_r2=as.numeric(b))
+      } else {c <- cbind(snp=rsid, ld_snp="NA", ld_r2="NA")}
+      }
+    } else {
+      c <- c(snp=rsid, ld_snp="NA",ld_r2="NA")}
+  } else {c <- c(snp=rsid, ld_snp="NA",ld_r2="NA")}
+  
+  ldres <- rbind(ldres,c)
+}
+ldres$match<-bres$match
+for (i in 1:nrow(mr)){
+  if (nrow(ldres[ldres$match==mr[i,"match"],])==1){mr[i,"ldcheck"]<-ldres[ldres$match==mr[i,"match"],"ld_r2"]}
+  else {mr[i,"ldcheck"]<-max(ldres[ldres$match==mr[i,"match"],"ld_r2"])}
+}
+write.csv(ldres,"/Users/tq20202/Desktop/DICE/ldres.csv")
+write.csv(mr,"/Users/tq20202/Desktop/DICE/mrresfdr.csv")
+
+#############PWCOCO####################################
+t<-c()
+s1<-"./pwcoco --bfile /user/home/tq20202/pwcoco/pwcoco-master/build/reference_panal/EUR/EUR  --sum_stats1 dice/"
+s2<-"_exp.txt  --sum_stats2  dice/"
+s3<-"_out.txt  --out diceres/"
+s4<-" --out_cond"
+for(i in 1:1440){
+  temp<-paste(s1,i,s2,i,s3,i,s4,sep="")
+  t<-rbind(t,temp)
+}
+write.csv(t,"/Users/tq20202/Desktop/DICE/pwcoco.csv")
+
+
+
+
+
+
+
 
 
 
