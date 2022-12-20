@@ -1,0 +1,50 @@
+---
+title: "MR beta compare between DICE and oneK1K"
+author: "ling"
+date: '2022-12-20'
+output: html_document
+---
+
+## DICE select top findings in B cell naive, oneK1K select all MR results in B cell naive since no gene_cancer_B cell naive pairs could be found for top findings
+```{r}
+library(ggplot2)
+setwd("/Users/tq20202/Desktop")
+dice<-read.csv("dicetop_bcell.csv")
+onek1k<-read.csv("onek1k_bcell.csv")
+i<-intersect(dice$m,onek1k$m)
+test<-data.frame(id=i,dice_beta=dice[dice$m==i,"b"],onek1k_beta=onek1k[onek1k$m==i,"b"])
+test
+```
+## we only got one result in same direction
+
+## we then select DICE all MR findings in B cell naive, oneK1K select all MR results in B cell naive and match
+```{r}
+setwd("/Users/tq20202/Desktop/DICE2")
+f=list.files("mrres")
+setwd("/Users/tq20202/Desktop/DICE2/mrres")
+data<-c()
+for (i in 1:length(f)){
+  temp<-read.table(file=f[i], header=T, sep="\t", quote="", stringsAsFactors=F, check.names=F)
+  temp$gene<-sapply(strsplit(as.character(temp$id),'_'), "[", 1)
+  temp$cell<-sapply(strsplit(as.character(temp$id),'_'), "[", 2)
+  temp$cancer<-strsplit(f[i],split = "_")[[1]][2]
+  temp<-temp[temp$cell=="B cell, naive",]
+  data<-rbind(data,temp)
+}
+data$m=paste(data$gene,data$cancer,sep="_")
+i<-intersect(data$m,onek1k$m)
+dice<-data[data$m %in% i,]
+dice<-dice[order(dice$m),]
+onek1k<-onek1k[onek1k$m %in% i,]
+onek1k<-onek1k[order(onek1k$m),]
+dd<-data.frame(beta_dice=dice$b,beta_oneK1K=onek1k$b)
+head(dd)
+```
+
+## scatter plot
+
+```{r}
+ggplot(data = dd, mapping = aes(x = beta_dice, y = beta_oneK1K)) + geom_point(size = 3, alpha=0.3)
+```
+
+
