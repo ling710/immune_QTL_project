@@ -1,0 +1,76 @@
+---
+title: "MR beta compare between DICE and oneK1K"
+author: "ling"
+date: '2022-12-20'
+output: html_document
+---
+## Overview
+We aim to compare the beta value of MR results in DICE and oneK1K datasets. The matching criteria is "gene-cancer-cell type". We select B cell naive cell type for compare.
+Analysis1 is for DICE top findings, Analysis2 is for DICE all MR results.
+
+## Analysis1
+### Datasets1
+DICE has 973 top findings (MR+coloc evidence) , we select the top findings in B cell naive, we got 65 results for compare.
+We detect no gene_B cell naive pairs of DICE top findings in oneK1K top findings, so we use all MR results in oneK1K with the same gene_B cell naive pairs. We have 273 results for compare.
+We match the two compare datasets with the matching criteria
+
+```{r}
+library(ggplot2)
+setwd("/Users/tq20202/Desktop")
+dice<-read.csv("dicetop_bcell.csv")
+head(dice)
+onek1k<-read.csv("onek1k_bcell.csv")
+head(onek1k)
+i<-intersect(dice$m,onek1k$m)
+test<-data.frame(id=i,dice_beta=dice[dice$m==i,"b"],onek1k_beta=onek1k[onek1k$m==i,"b"])
+test
+```
+we only got one result in same direction
+
+## Analysis2
+### Datasets2
+we then select DICE all MR findings in B cell naive, 12183 results total
+oneK1K select all MR results in B cell naive,1420 results total
+match the two datasets with the matching criteria,378 matched results total for plotting
+
+```{r}
+f=list.files("/Users/tq20202/Desktop/DICE2/mrres")
+data<-c()
+for (i in 1:length(f)){
+  temp<-read.table(file=paste("/Users/tq20202/Desktop/DICE2/mrres/",f[i],sep=""), header=T, sep="\t", quote="", stringsAsFactors=F, check.names=F)
+  temp$gene<-sapply(strsplit(as.character(temp$id),'_'), "[", 1)
+  temp$cell<-sapply(strsplit(as.character(temp$id),'_'), "[", 2)
+  temp$cancer<-strsplit(f[i],split = "_")[[1]][2]
+  temp<-temp[temp$cell=="B cell, naive",]
+  data<-rbind(data,temp)
+}
+data$m=paste(data$gene,data$cancer,sep="_")
+
+f=list.files("/Users/tq20202/Desktop/oneK1K/mrres")
+data2<-c()
+for (i in 1:length(f)){
+  temp<-read.table(paste("/Users/tq20202/Desktop/oneK1K/mrres/",file=f[i],sep=""), header=T, sep="\t", quote="", stringsAsFactors=F, check.names=F)
+  temp$gene<-sapply(strsplit(as.character(temp$id),'_'), "[", 1)
+  temp$cell<-sapply(strsplit(as.character(temp$id),'_'), "[", 2)
+  temp$cancer<-strsplit(f[i],split = "_")[[1]][2]
+  temp<-temp[temp$cell=="Naïve/Immature B Cell",]
+  data2<-rbind(data2,temp)
+}
+data2$m=paste(data2$gene,data2$cancer,sep="_")
+i<-intersect(data$m,data2$m)
+dice<-data[data$m %in% i,]
+dice<-dice[order(dice$m),]
+onek1k<-data2[data2$m %in% i,]
+onek1k<-onek1k[order(onek1k$m),]
+dd<-data.frame(beta_dice=dice$b,beta_oneK1K=onek1k$b)
+head(dd)
+```
+
+## scatter plot
+
+```{r}
+ggplot(data = dd, mapping = aes(x = beta_dice, y = beta_oneK1K)) + geom_point(size = 3, alpha=0.3)
+```
+
+## conclusion
+The beta value of MR results in DICE and oneK1K datasets seems not very consistent
